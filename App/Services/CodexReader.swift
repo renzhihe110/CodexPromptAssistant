@@ -14,7 +14,7 @@ actor CodexReader {
         let transport = self.transport
         let task = Task {
             try await transport.start()
-            _ = try await transport.request("initialize", params: ["clientInfo": .object(["name": .string("codex_prompt_assistant"), "title": .string("提示词助手"), "version": .string("0.1.3")]), "capabilities": .object([:])])
+            _ = try await transport.request("initialize", params: ["clientInfo": .object(["name": .string("codex_prompt_assistant"), "title": .string("提示词助手"), "version": .string("0.1.4")]), "capabilities": .object([:])])
             try await transport.initialized()
         }
         connection = task

@@ -72,8 +72,8 @@ enum ReleaseUpdate {
         }
     }
 
-    // 临时目录与安装位置在同一卷；下载、解压或安全检查失败时，原包尚未动过。
-    static func prepare(release: GitHubRelease, version: String, installed: URL) async throws -> URL {
+    // ZIP 与应用先在私有目录准备，校验后一起移入下载目录供 Finder 显示。
+    static func download(release: GitHubRelease, version: String, to downloads: URL) async throws -> (app: URL, securityWarning: String?) {
         let asset = try release.package(version: version, architecture: architecture)
         let url = URL(string: "\(GitHubRelease.repository)/releases/download/\(release.tag_name)/\(asset.name)")!
         let (archive, response) = try await URLSession.shared.download(from: url)
@@ -85,29 +85,50 @@ enum ReleaseUpdate {
             throw UpdateFailure("下载的 ZIP 与 GitHub 的 SHA-256 或大小不符，请重新下载。")
         }
         let fm = FileManager.default
-        let stage = installed.deletingLastPathComponent().appendingPathComponent(".prompt-update-" + UUID().uuidString)
+        let stage = downloads.appendingPathComponent(".prompt-update-" + UUID().uuidString, isDirectory: true)
         try fm.createDirectory(at: stage, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        defer { try? fm.removeItem(at: stage) }
+
+        // 给 ZIP 和解压出的应用都保留网络来源信息。只解压预期的应用包。
+        let zip = stage.appendingPathComponent(asset.name)
+        try fm.moveItem(at: archive, to: zip)
+        let quarantine: [String: Any] = [kLSQuarantineTypeKey as String: kLSQuarantineTypeWebDownload,
+                                          kLSQuarantineDataURLKey as String: url]
+        try (zip as NSURL).setResourceValue(quarantine, forKey: .quarantinePropertiesKey)
+        let app = stage.appendingPathComponent("提示词助手.app")
+        try command("/usr/bin/tar", ["-xf", zip.path, "-C", stage.path, "--no-same-owner", app.lastPathComponent], failure: "解压安装包失败")
+        let values = try app.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard values.isDirectory == true, values.isSymbolicLink != true else {
+            throw UpdateFailure("ZIP 中缺少有效的「提示词助手.app」。")
+        }
+        try (app as NSURL).setResourceValue(quarantine, forKey: .quarantinePropertiesKey)
+        try validate(app, version: version)
+
+        // Gatekeeper 的评估结果单独提示；展示下载文件不会启动应用或改变系统策略。
+        var warning: String?
         do {
-            // bsdtar 默认拒绝 .. 和穿越符号链接的解压路径，不启用 -P。
-            try command("/usr/bin/tar", ["-xf", archive.path, "-C", stage.path, "--no-same-owner"], failure: "解压安装包失败")
-            let app = stage.appendingPathComponent("提示词助手.app")
-            let values = try app.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-            guard values.isDirectory == true, values.isSymbolicLink != true else {
-                throw UpdateFailure("ZIP 中缺少有效的「提示词助手.app」。")
-            }
-            // 让 Launch Services 保留网络来源标记，并在替换前显式执行 Gatekeeper 评估。
-            let quarantine: [String: Any] = [kLSQuarantineTypeKey as String: kLSQuarantineTypeWebDownload,
-                                              kLSQuarantineDataURLKey as String: url]
-            try (app as NSURL).setResourceValue(quarantine, forKey: .quarantinePropertiesKey)
-            try validate(app, version: version)
-            return app
+            try command("/usr/sbin/spctl", ["--assess", "--type", "execute", "--verbose=2", app.path], failure: "Gatekeeper 未批准此应用，可能缺少受信任的分发签名或 Apple 公证")
         } catch {
-            try? fm.removeItem(at: stage)
-            throw error
+            warning = error.localizedDescription.replacingOccurrences(of: app.path, with: app.lastPathComponent)
+        }
+        let folderName = "提示词助手 " + version
+        var number = 1
+        while true {
+            let name = number == 1 ? folderName : "\(folderName) (\(number))"
+            let destination = downloads.appendingPathComponent(name, isDirectory: true)
+            // 原子移动并拒绝覆盖；重复下载或同时下载时使用新的文件夹。
+            if renamex_np(stage.path, destination.path, UInt32(RENAME_EXCL)) == 0 {
+                return (destination.appendingPathComponent(app.lastPathComponent), warning)
+            }
+            let reason = errno
+            guard reason == EEXIST else {
+                throw UpdateFailure("无法保存到「下载」文件夹：\(String(cString: strerror(reason)))")
+            }
+            number += 1
         }
     }
 
-    static func validate(_ app: URL, version: String) throws {
+    private static func validate(_ app: URL, version: String) throws {
         guard let bundle = Bundle(url: app), bundle.bundleIdentifier == Bundle.main.bundleIdentifier,
               bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String == version,
               let executable = bundle.executableURL, executable.resolvingSymlinksInPath().path.hasPrefix(app.resolvingSymlinksInPath().path + "/Contents/MacOS/"),
@@ -126,14 +147,6 @@ enum ReleaseUpdate {
             }
         }
         try command("/usr/bin/codesign", ["--verify", "--deep", "--strict", "--all-architectures", app.path], failure: "应用签名校验失败")
-        try command("/usr/sbin/spctl", ["--assess", "--type", "execute", "--verbose=2", app.path], failure: "macOS 安全校验未通过，无法安装此版本")
-    }
-
-    // 原子交换保留完整旧包；第二次交换可在启动失败时还原原安装路径。
-    static func exchange(_ installed: URL, _ staged: URL) throws {
-        guard renamex_np(installed.path, staged.path, UInt32(RENAME_SWAP)) == 0 else {
-            throw UpdateFailure("无法交换应用包：\(String(cString: strerror(errno)))")
-        }
     }
 
     private static func command(_ path: String, _ arguments: [String], failure: String) throws {
