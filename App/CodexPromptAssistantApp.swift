@@ -16,6 +16,9 @@ struct CodexPromptAssistantApp: App {
                 delegate.windowController?.show()
             }
             .keyboardShortcut("p", modifiers: [.control, .option, .command])
+            UpdateMenu(updater: delegate.updater) {
+                delegate.checkForUpdates()
+            }
             Text("提示词助手窗口内按 ⌘D 收起或展开")
             Divider()
             Button("退出提示词助手") {
@@ -27,16 +30,53 @@ struct CodexPromptAssistantApp: App {
     }
 }
 
+// 菜单直接显示下载状态，手动点击可取得静默检查的结果。
+private struct UpdateMenu: View {
+    @ObservedObject var updater: UpdateController
+    let check: () -> Void
+
+    var body: some View {
+        Button(updater.phase?.rawValue ?? "检查更新", action: check)
+            .disabled(updater.phase != nil && updater.phase != .checking)
+    }
+}
+
 @MainActor
 final class AssistantAppDelegate: NSObject, NSApplicationDelegate {
     private(set) var windowController: AssistantWindowController?
+    let updater = UpdateController()
     private var terminating = false
 
+    func checkForUpdates() {
+        if let state = windowController?.state {
+            updater.check(state: state, manual: true)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 更新交接时，等旧进程释放快捷键和附件管理器后再创建新窗口。
+        let args = ProcessInfo.processInfo.arguments
+        if let index = args.firstIndex(of: "--replacing-process"), args.indices.contains(index + 1),
+           let pid = Int32(args[index + 1]), pid != ProcessInfo.processInfo.processIdentifier,
+           let old = NSRunningApplication(processIdentifier: pid), old.bundleIdentifier == Bundle.main.bundleIdentifier {
+            Task {
+                let deadline = ContinuousClock.now + .seconds(30)
+                while !old.isTerminated && ContinuousClock.now < deadline {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                start()
+            }
+        } else {
+            start()
+        }
+    }
+
+    private func start() {
         let state = AppState()
         let controller = AssistantWindowController(state: state)
         windowController = controller
         controller.show()
+        updater.check(state: state, manual: false)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -45,6 +85,7 @@ final class AssistantAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if updater.switching { return .terminateCancel }
         guard !terminating else {
             return .terminateLater
         }

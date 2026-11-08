@@ -747,6 +747,16 @@ final class AppState: ObservableObject {
         editingCandidate = nil
     }
 
+    // 切换来源时缓存的轮次同样只在内存中，重启前也要提醒用户。
+    var hasUnsavedRounds: Bool {
+        isBusy || roundStarted || editingCandidate != nil || !draft.isEmpty || !messages.isEmpty ||
+        !pendingAttachments.isEmpty || !clarificationDrafts.isEmpty || retryAvailable ||
+        savedRounds.values.contains { round in
+            round.roundStarted || !round.draft.isEmpty || !round.messages.isEmpty ||
+            !round.pendingAttachments.isEmpty || !round.clarificationDrafts.isEmpty || round.retryAvailable
+        }
+    }
+
     func shutdown() async {
         deliveryTask?.cancel()
         generationTask?.cancel()
