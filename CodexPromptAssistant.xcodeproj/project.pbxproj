@@ -27,6 +27,7 @@
 		D6C263A1B39B49264A3692D2 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6657F325940C1CB48DD182FE /* AppState.swift */; };
 		DA571ECE0C4CF32832891BB9 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8108E162A08BC357EB39BC /* JSONValue.swift */; };
 		DEC7CA290270E8198195EBCD /* question-response.json in Resources */ = {isa = PBXBuildFile; fileRef = E0AD5229BD3368F43005529D /* question-response.json */; };
+		6119A309643E47029CB08664 /* refinement-response.json in Resources */ = {isa = PBXBuildFile; fileRef = 399EA219616E48CB951D67D4 /* refinement-response.json */; };
 		EB5614437419E7F6D23E99DC /* StreamingResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596C7824573A0E36061A89F5 /* StreamingResponse.swift */; };
 		ECC5D1BB13D060FB775D29E7 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B54219F16450179ECFDFA6 /* ChatView.swift */; };
 		FC002984A7EB466A97B41063 /* CodexCandidateSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3438029B764EC7950A759D /* CodexCandidateSender.swift */; };
@@ -57,6 +58,7 @@
 		DE6A6F345B0A9803B299FD1C /* CodexPromptAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodexPromptAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DFFCA3FDFC6B976221456182 /* candidates-response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "candidates-response.json"; sourceTree = "<group>"; };
 		E0AD5229BD3368F43005529D /* question-response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "question-response.json"; sourceTree = "<group>"; };
+		399EA219616E48CB951D67D4 /* refinement-response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "refinement-response.json"; sourceTree = "<group>"; };
 		E1F242FFA60D1A80C62EA72B /* flexible-response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "flexible-response.json"; sourceTree = "<group>"; };
 		E570D8336751AFF360F9B957 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -75,6 +77,7 @@
 				DFFCA3FDFC6B976221456182 /* candidates-response.json */,
 				E1F242FFA60D1A80C62EA72B /* flexible-response.json */,
 				E0AD5229BD3368F43005529D /* question-response.json */,
+				399EA219616E48CB951D67D4 /* refinement-response.json */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -215,6 +218,7 @@
 				486391930E5BAA5501BB1DE0 /* candidates-response.json in Resources */,
 				8BD853DAD929E67C1B926CD5 /* flexible-response.json in Resources */,
 				DEC7CA290270E8198195EBCD /* question-response.json in Resources */,
+				6119A309643E47029CB08664 /* refinement-response.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

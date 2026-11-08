@@ -163,6 +163,7 @@ struct PromptCandidate: Codable, Identifiable, Sendable {
 }
 
 struct AnswerRecord: Codable, Sendable {
+    var questionID: String? = nil
     let question: String
     let answer: String
 }
@@ -180,6 +181,7 @@ struct ChatMessage: Identifiable {
     var question: ClarifyingQuestion?
     var questionNumber: Int?
     var candidates: [PromptCandidate] = []
+    var clarificationQuestions: [ClarifyingQuestion] = []
 }
 
 struct EngineResponse: Decodable, Sendable {
@@ -187,9 +189,27 @@ struct EngineResponse: Decodable, Sendable {
     let question: ClarifyingQuestion?
     let candidates: [PromptCandidate]
 
+    let questions: [ClarifyingQuestion]?
+
     // Schema 之外再约束分支关系，避免将损坏结果写入问答状态。
-    func validated(candidatesOnly: Bool) throws -> EngineResponse {
-        if kind == "question" {
+    func validated(mode: AssistantMode, candidatesOnly: Bool) throws -> EngineResponse {
+        // 完善文本总有一份可独立复制的正文。问题可为空，每题必须有可区分的具体选项。
+        if mode == .refine {
+            guard kind == "refinement", question == nil, candidates.count == 1,
+                  let draft = candidates.first, !draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  let questions, questions.count <= 3, Set(questions.map(\.id)).count == questions.count,
+                  Set(questions.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }).count == questions.count else {
+                throw AssistantError.invalidResponse
+            }
+            for item in questions {
+                let ids = item.options.map(\.id)
+                guard !item.id.isEmpty, !item.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      (2...3).contains(ids.count), Set(ids).count == ids.count, !ids.contains(""), ids.contains(item.recommendedID),
+                      item.options.allSatisfy({ !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !$0.detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+                    throw AssistantError.invalidResponse
+                }
+            }
+        } else if kind == "question" {
             guard !candidatesOnly, let question, !question.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, (1...3).contains(question.options.count), candidates.isEmpty else {
                 throw AssistantError.invalidResponse
             }
@@ -215,6 +235,7 @@ enum AssistantError: LocalizedError {
     case timeout(String)
     case rpc(String, Int, String)
     case invalidResponse
+    case repetitiveOutput
     case missingSchema
     case imageUnsupported
     case imageUnreadable
@@ -234,6 +255,8 @@ enum AssistantError: LocalizedError {
             return "\(operation)超时，已保留当前内容，可以重试。"
         case .rpc(let method, let code, let message):
             return "Codex 接口 \(method) 返回错误 \(code)：\(message)"
+        case .repetitiveOutput:
+            return "检测到增强版提示词连续重复，已停止生成。已保留你的输入，可以重试。"
         case .invalidResponse:
             return "未能整理出有效的问题或候选，当前回答已保留，请重试。"
         case .missingSchema:

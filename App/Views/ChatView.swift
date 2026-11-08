@@ -122,6 +122,7 @@ struct ChatView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     ForEach(state.messages) { message in
                         MessageView(message: message, state: state)
+                            .id(message.id)
                     }
                     if !state.streamingPreview.isEmpty {
                         StreamingPreviewView(preview: state.streamingPreview, isBusy: state.isBusy)
@@ -150,7 +151,12 @@ struct ChatView: View {
             }
             .onChange(of: state.messages.count) { _, _ in
                 withAnimation(.easeOut(duration: 0.18)) {
-                    proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                    // 完整结果从增强版正文开始阅读，长问题列表不遮住首屏复制入口。
+                    if let last = state.messages.last, state.isCurrentRefinement(last) {
+                        proxy.scrollTo(last.id, anchor: .top)
+                    } else {
+                        proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                    }
                 }
             }
             .onChange(of: state.isBusy) { _, busy in
@@ -159,7 +165,8 @@ struct ChatView: View {
                 }
             }
             // 只合并滚动请求，正文仍随真实分片立即更新；在下一次 RunLoop 中滚动，避免布局反馈。
-            .onReceive(state.$streamingPreview.throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)) { _ in
+            .onReceive(state.$streamingPreview.throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)) { preview in
+                guard state.isBusy, !preview.isEmpty else { return }
                 proxy.scrollTo("conversation-bottom", anchor: .bottom)
             }
         }
@@ -367,13 +374,18 @@ private struct MessageView: View {
         } else if !message.candidates.isEmpty {
             // 操作仅随正式结果出现，每条候选保留独立的编辑与复制入口。
             VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 14) {
-                    AssistantAvatar()
-                    Text("选一条提示词")
-                        .font(.custom("Songti SC", size: 25).weight(.bold))
+                if state.mode == .nextStep {
+                    HStack(spacing: 14) {
+                        AssistantAvatar()
+                        Text("选一条提示词")
+                            .font(.custom("Songti SC", size: 25).weight(.bold))
+                    }
                 }
                 ForEach(message.candidates) { candidate in
                     CandidateView(candidate: candidate, state: state)
+                }
+                if state.isCurrentRefinement(message), !state.remainingQuestions.isEmpty {
+                    ClarificationForm(questions: state.remainingQuestions, state: state)
                 }
             }
         } else if let question = message.question {
@@ -417,6 +429,54 @@ private struct StreamingPreviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.disabled)
         }
+    }
+}
+
+// 可只回答部分问题。每个选项保留具体含义，自填内容使用同一份本轮草稿。
+private struct ClarificationForm: View {
+    let questions: [ClarifyingQuestion]
+    @ObservedObject var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("可选澄清问题")
+                .font(.headline)
+            ForEach(questions) { question in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(question.text)
+                        .fontWeight(.semibold)
+                    ForEach(question.options) { option in
+                        let answer = option.title + "：" + option.detail
+                        let selected = state.clarificationDrafts[question.id] == answer
+                        Button {
+                            state.clarificationDrafts[question.id] = selected ? nil : answer
+                        } label: {
+                            HStack(alignment: .top) {
+                                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(option.title)
+                                    Text(option.detail).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(selected ? .isSelected : [])
+                    }
+                    TextField("填写或修改答案", text: Binding(
+                        get: { state.clarificationDrafts[question.id] ?? "" },
+                        set: { state.clarificationDrafts[question.id] = $0 }
+                    ), axis: .vertical)
+                        .accessibilityLabel(question.text)
+                        .textFieldStyle(.roundedBorder)
+                }
+                Divider()
+            }
+            Button("更新增强版提示词", action: state.submit)
+                .disabled(!state.canSubmit)
+        }
+        .disabled(state.isBusy)
     }
 }
 

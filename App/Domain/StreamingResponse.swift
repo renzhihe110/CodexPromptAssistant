@@ -17,6 +17,40 @@ struct GenerationPreview: Equatable, Sendable {
     }
 }
 
+// 只识别密集的短句复读；单纯篇幅较长、相似开头或重复术语都不足以触发。
+enum RefinementRepetition {
+    static let sentenceEnds: Set<Character> = ["。", "！", "？", ".", "!", "?"]
+
+    static func detected(in text: Substring) -> Bool {
+        var recent: [String] = []
+        var counts: [String: Int] = [:]
+        var start = text.startIndex
+        for index in text.indices where sentenceEnds.contains(text[index]) {
+            let fragment = text[start..<index].trimmingCharacters(in: .whitespacesAndNewlines)
+            start = text.index(after: index)
+            if fragment.isEmpty { continue }
+            guard (2...48).contains(fragment.count), !fragment.contains("\n") else {
+                recent.removeAll(keepingCapacity: true)
+                counts.removeAll(keepingCapacity: true)
+                continue
+            }
+            let sentence = fragment.lowercased()
+            recent.append(sentence)
+            counts[sentence, default: 0] += 1
+            if recent.count > 48 {
+                let oldest = recent.removeFirst()
+                counts[oldest, default: 1] -= 1
+                if counts[oldest] == 0 { counts[oldest] = nil }
+            }
+            // 连续五次原句，或一段内多种短句交替复现，才中止这一轮。
+            if recent.count >= 5, recent.suffix(5).allSatisfy({ $0 == sentence }) { return true }
+            if recent.count == 48, recent.count - counts.count >= 9,
+               counts.values.contains(where: { $0 >= 3 }), counts.values.filter({ $0 >= 2 }).count >= 3 { return true }
+        }
+        return false
+    }
+}
+
 // 仅记录界面生命周期时序，不保存正文；首次预览和最终结果出现与模型首 token 分开计量。
 struct GenerationTiming {
     let id: UUID

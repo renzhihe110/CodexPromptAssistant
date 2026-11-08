@@ -45,6 +45,8 @@ final class AppState: ObservableObject {
     @Published private(set) var pendingAttachments: [ImageAttachment] = []
     @Published private(set) var snapshot: ContextSnapshot?
     @Published private(set) var activeQuestion: ClarifyingQuestion?
+    // 每题可独立选答或填写；点击更新前仍可修改或清空。
+    @Published var clarificationDrafts: [String: String] = [:]
     @Published private(set) var questionCount = 0
     @Published private(set) var isConnecting = false
     @Published private(set) var isLoadingChats = false
@@ -112,6 +114,7 @@ final class AppState: ObservableObject {
         var pendingAttachments: [ImageAttachment] = []
         var snapshot: ContextSnapshot?
         var activeQuestion: ClarifyingQuestion?
+        var clarificationDrafts: [String: String] = [:]
         var questionCount = 0
         var roundStarted = false
         var candidatesOnly = false
@@ -169,6 +172,17 @@ final class AppState: ObservableObject {
         return ReasoningOption(id: resolvedEffort, detail: "").title
     }
 
+    // 以最近一次正式结果为准。已提交的答案在失败和重试期间也不会重新出现。
+    var remainingQuestions: [ClarifyingQuestion] {
+        let previous = messages.last(where: { !$0.candidates.isEmpty })?.clarificationQuestions ?? []
+        let answered = Set(answers.compactMap(\.questionID))
+        return previous.filter { !answered.contains($0.id) }
+    }
+
+    func isCurrentRefinement(_ message: ChatMessage) -> Bool {
+        mode == .refine && message.candidates.first?.id == latestCandidates.first?.id && !message.candidates.isEmpty
+    }
+
     var canSubmit: Bool {
         guard !isBusy, !isConnecting, selectedChat != nil else {
             return false
@@ -177,7 +191,7 @@ final class AppState: ObservableObject {
         if text == "其他：" || text == "其他:" {
             return false
         }
-        return !text.isEmpty || (!roundStarted && (mode == .nextStep || !pendingAttachments.isEmpty))
+        return !text.isEmpty || clarificationDrafts.values.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } || (!roundStarted && (mode == .nextStep || !pendingAttachments.isEmpty))
     }
 
     var composerPlaceholder: String {
@@ -188,7 +202,7 @@ final class AppState: ObservableObject {
             return "选择一个选项，或补充你的想法…"
         }
         if !latestCandidates.isEmpty {
-            return "可以补充要求，继续调整候选提示词…"
+            return mode == .refine ? "补充要求，更新增强版提示词…" : "可以补充要求，继续调整候选提示词…"
         }
         return "写下你想完善的提示词…"
     }
@@ -268,7 +282,7 @@ final class AppState: ObservableObject {
             return
         }
         if let previousID = selectedChat?.id, previousID != chat.id {
-            savedRounds[previousID] = RoundProgress(id: roundID, context: roundContext, forkBoundary: forkBoundary, sideChatFailed: sideChatFailed, mode: mode, draft: draft, messages: messages, pendingAttachments: pendingAttachments, snapshot: snapshot, activeQuestion: activeQuestion, questionCount: questionCount, roundStarted: roundStarted, candidatesOnly: candidatesOnly, initialDraft: initialDraft, answers: answers, feedback: feedback, roundAttachments: roundAttachments, latestCandidates: latestCandidates, preview: streamingPreview, retryAvailable: retryAvailable, errorMessage: errorMessage, information: information, deliveryNotice: deliveryNotice)
+            savedRounds[previousID] = RoundProgress(id: roundID, context: roundContext, forkBoundary: forkBoundary, sideChatFailed: sideChatFailed, mode: mode, draft: draft, messages: messages, pendingAttachments: pendingAttachments, snapshot: snapshot, activeQuestion: activeQuestion, clarificationDrafts: clarificationDrafts, questionCount: questionCount, roundStarted: roundStarted, candidatesOnly: candidatesOnly, initialDraft: initialDraft, answers: answers, feedback: feedback, roundAttachments: roundAttachments, latestCandidates: latestCandidates, preview: streamingPreview, retryAvailable: retryAvailable, errorMessage: errorMessage, information: information, deliveryNotice: deliveryNotice)
             restoreRound(savedRounds.removeValue(forKey: chat.id) ?? RoundProgress())
         }
         selectedChat = chat
@@ -333,6 +347,7 @@ final class AppState: ObservableObject {
         pendingAttachments = round.pendingAttachments
         snapshot = round.snapshot
         activeQuestion = round.activeQuestion
+        clarificationDrafts = round.clarificationDrafts
         questionCount = round.questionCount
         roundStarted = round.roundStarted
         candidatesOnly = round.candidatesOnly
@@ -413,7 +428,17 @@ final class AppState: ObservableObject {
         if endingQuestions {
             candidatesOnly = true
         }
-        let visible = text.nonEmpty(or: endingQuestions ? "结束提问，生成提示词。" : "结合当前聊天，帮我推荐下一步。")
+        // 仅把用户实际填写的内容带入下一版，并把问答保留在本轮记录中。
+        let confirmed = remainingQuestions.compactMap { question -> AnswerRecord? in
+            guard let answer = clarificationDrafts[question.id]?.trimmingCharacters(in: .whitespacesAndNewlines), !answer.isEmpty else {
+                return nil
+            }
+            return AnswerRecord(questionID: question.id, question: question.text, answer: answer)
+        }
+        answers.append(contentsOf: confirmed)
+        clarificationDrafts.removeAll()
+        let summary = ([text] + confirmed.map { $0.question + " → " + $0.answer }).filter { !$0.isEmpty }.joined(separator: "\n")
+        let visible = summary.nonEmpty(or: endingQuestions ? "结束提问，生成提示词。" : "结合当前聊天，帮我推荐下一步。")
         messages.append(ChatMessage(role: .user, text: visible, attachments: addedImages))
         // 只在提交通过校验后展开；换行、无效选项和停止生成不会触发展开。
         isWindowCollapsed = false
@@ -492,7 +517,7 @@ final class AppState: ObservableObject {
                 if !roundAttachments.isEmpty, resolvedModel?.supportsImages != true {
                     throw AssistantError.imageUnsupported
                 }
-                let input = GenerationInput(mode: mode, chat: chat, snapshot: snapshot, roundID: roundID, forkBoundary: contextMode == .sideChat ? forkBoundary : nil, draft: initialDraft, answers: answers, feedback: feedback, previousCandidates: latestCandidates, attachments: roundAttachments, questionCount: questionCount, candidatesOnly: candidatesOnly, configuration: currentConfiguration, modelID: modelID, effort: resolvedEffort)
+                let input = GenerationInput(mode: mode, chat: chat, snapshot: snapshot, roundID: roundID, forkBoundary: contextMode == .sideChat ? forkBoundary : nil, draft: initialDraft, answers: answers, remainingQuestions: remainingQuestions, feedback: feedback, previousCandidates: latestCandidates, attachments: roundAttachments, questionCount: questionCount, candidatesOnly: candidatesOnly, configuration: currentConfiguration, modelID: modelID, effort: resolvedEffort)
                 loadingText = candidatesOnly ? "正在整理候选提示词…" : "正在理解你的想法…"
                 let response = try await engine.generate(input) { [weak state = self] preview in
                     await state?.receivePreview(preview, id: id)
@@ -520,6 +545,10 @@ final class AppState: ObservableObject {
                 }
                 isBusy = false
                 retryAvailable = true
+                // 重复正文不是可用结果；只清理本次预览，保留最近的已确认提示词。
+                if case AssistantError.repetitiveOutput = error {
+                    streamingPreview = GenerationPreview()
+                }
                 if case AssistantError.sideChatFailed = error {
                     sideChatFailed = true
                 }
@@ -554,7 +583,14 @@ final class AppState: ObservableObject {
     }
 
     private func accept(_ response: EngineResponse) {
-        if let question = response.question {
+        if response.kind == "refinement" {
+            // 首轮列出关键问题；更新时只允许保留上一版的未答问题，保持题意与选项稳定。
+            let proposed = response.questions ?? []
+            let retainedIDs = Set(proposed.map(\.id))
+            let questions = latestCandidates.isEmpty ? proposed : remainingQuestions.filter { retainedIDs.contains($0.id) }
+            latestCandidates = response.candidates.map { PromptCandidate(id: UUID().uuidString, title: "增强版提示词", prompt: $0.prompt) }
+            messages.append(ChatMessage(role: .assistant, text: "", candidates: latestCandidates, clarificationQuestions: questions))
+        } else if let question = response.question {
             let orderedOptions = question.options.filter { $0.id == question.recommendedID } + question.options.filter { $0.id != question.recommendedID }
             let normalized = ClarifyingQuestion(id: UUID().uuidString, text: question.text, options: orderedOptions, recommendedID: question.recommendedID)
             activeQuestion = normalized
