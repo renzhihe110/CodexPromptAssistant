@@ -181,7 +181,10 @@ struct ChatMessage: Identifiable {
     var question: ClarifyingQuestion?
     var questionNumber: Int?
     var candidates: [PromptCandidate] = []
+    // 对比用户保存后的正文，允许只改正文也能刷新问题。
+    var generatedPrompt: String? = nil
     var clarificationQuestions: [ClarifyingQuestion] = []
+    var resolvedClarifications: [String: String] = [:]
 }
 
 struct EngineResponse: Decodable, Sendable {
@@ -190,6 +193,7 @@ struct EngineResponse: Decodable, Sendable {
     let candidates: [PromptCandidate]
 
     let questions: [ClarifyingQuestion]?
+    let resolvedQuestionIDs: [String]?
 
     // Schema 之外再约束分支关系，避免将损坏结果写入问答状态。
     func validated(mode: AssistantMode, candidatesOnly: Bool) throws -> EngineResponse {
@@ -197,7 +201,7 @@ struct EngineResponse: Decodable, Sendable {
         if mode == .refine {
             guard kind == "refinement", question == nil, candidates.count == 1,
                   let draft = candidates.first, !draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  let questions, questions.count <= 3, Set(questions.map(\.id)).count == questions.count,
+                  let questions, Set(questions.map(\.id)).count == questions.count,
                   Set(questions.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }).count == questions.count else {
                 throw AssistantError.invalidResponse
             }

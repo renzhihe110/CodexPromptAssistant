@@ -279,7 +279,9 @@ struct ChatView: View {
                         .font(.caption)
                         .textSelection(.enabled)
                     HStack {
-                        Button("重试侧边聊天", action: state.retry)
+                        if !state.hasCurrentRefinement {
+                            Button("重试侧边聊天", action: state.retry)
+                        }
                         Button("本轮改用筛选快照", action: state.retryWithSnapshot)
                     }
                 }
@@ -294,12 +296,12 @@ struct ChatView: View {
                         .font(.system(size: 12))
                         .textSelection(.enabled)
                     Spacer(minLength: 8)
-                    if state.retryAvailable {
+                    if state.retryAvailable && !state.hasCurrentRefinement {
                         Button("重试") {
                             state.retry()
                         }
                         .disabled(state.isBusy)
-                    } else {
+                    } else if !state.retryAvailable {
                         Button("重新连接") {
                             state.reconnect()
                         }
@@ -321,7 +323,7 @@ struct ChatView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 Spacer()
-                if state.retryAvailable {
+                if state.retryAvailable && !state.hasCurrentRefinement {
                     Button("继续生成") {
                         state.retry()
                     }
@@ -382,10 +384,16 @@ private struct MessageView: View {
                     }
                 }
                 ForEach(message.candidates) { candidate in
-                    CandidateView(candidate: candidate, state: state)
+                    CandidateView(candidate: candidate, editable: state.mode != .refine || state.isCurrentRefinement(message), state: state)
                 }
-                if state.isCurrentRefinement(message), !state.remainingQuestions.isEmpty {
-                    ClarificationForm(questions: state.remainingQuestions, state: state)
+                if state.isCurrentRefinement(message) {
+                    if state.remainingQuestions.isEmpty {
+                        Text("暂无需要澄清的问题，可直接复制使用")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ClarificationForm(questions: state.remainingQuestions, state: state)
+                    }
                 }
             }
         } else if let question = message.question {
@@ -473,8 +481,6 @@ private struct ClarificationForm: View {
                 }
                 Divider()
             }
-            Button("更新增强版提示词", action: state.submit)
-                .disabled(!state.canSubmit)
         }
         .disabled(state.isBusy)
     }
@@ -587,6 +593,7 @@ private struct QuestionView: View {
 
 private struct CandidateView: View {
     let candidate: PromptCandidate
+    let editable: Bool
     @ObservedObject var state: AppState
 
     var body: some View {
@@ -595,16 +602,18 @@ private struct CandidateView: View {
                 Text(candidate.title)
                     .font(.system(size: 16, weight: .semibold))
                 Spacer()
-                Button {
-                    state.editingCandidate = CandidateEdit(candidate)
-                } label: {
-                    Label("编辑", systemImage: "pencil")
+                if editable {
+                    Button {
+                        state.editingCandidate = CandidateEdit(candidate)
+                    } label: {
+                        Label("编辑", systemImage: "pencil")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .disabled(state.isBusy)
+                    Divider()
+                        .frame(height: 14)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .disabled(state.isBusy)
-                Divider()
-                    .frame(height: 14)
                 Button {
                     state.copyCandidate(candidate)
                 } label: {
@@ -720,7 +729,7 @@ private struct ComposerView: View {
                         .padding(.top, 8)
                         .allowsHitTesting(false)
                 }
-                ComposerEditor(text: $state.draft, enabled: !state.isBusy, onSubmit: state.submit, onPasteImage: state.pasteImage, onDropFile: state.addImage) { height in
+                ComposerEditor(text: $state.draft, enabled: !state.isBusy, onSubmit: state.hasCurrentRefinement ? nil : { state.submit() }, onPasteImage: state.pasteImage, onDropFile: state.addImage) { height in
                     editorHeight = height
                 }
                 .frame(height: max(editorHeight, state.messages.isEmpty ? (compact ? 77 : 96) : 54))
@@ -760,7 +769,7 @@ private struct ComposerView: View {
                     .buttonStyle(.plain)
                     .disabled(state.isBusy || state.isConnecting || state.selectedChat == nil)
                     .help("结合来源聊天和当前输入，立即推荐下一步")
-                } else {
+                } else if !state.hasCurrentRefinement {
                     Label(state.mode.title, systemImage: state.mode.symbol)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
@@ -797,30 +806,42 @@ private struct ComposerView: View {
                 .popover(isPresented: $state.showModelSettings, arrowEdge: .top) {
                     ModelSettingsView(state: state)
                 }
-                Button {
-                    if state.isBusy {
-                        state.cancelGeneration()
-                    } else {
-                        state.submit()
-                    }
-                } label: {
-                    Image(systemName: state.isBusy ? "stop.fill" : "arrow.up")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .frame(width: compact ? 34 : 40, height: compact ? 34 : 40)
-                        .background(state.isBusy || state.canSubmit ? AssistantPalette.accent : Color(red: 0.61, green: 0.62, blue: 1), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!state.isBusy && !state.canSubmit)
-                .help(state.isBusy ? "停止本次生成" : "提交到提示词助手")
+                submitControl
             }
             .padding(.horizontal, compact ? 12 : 19)
             .padding(.vertical, compact ? 10 : 14)
         }
-        .background(Color.white.opacity(0.87), in: RoundedRectangle(cornerRadius: 24))
+        .background(Color(white: 1, opacity: 0.87), in: RoundedRectangle(cornerRadius: 24))
         .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(dropTarget ? AssistantPalette.accent : Color(red: 0.70, green: 0.75, blue: 1), lineWidth: dropTarget ? 2 : 1))
         .shadow(color: AssistantPalette.accent.opacity(0.18), radius: 9, y: 5)
         .onDrop(of: [UTType.fileURL.identifier], isTargeted: $dropTarget, perform: acceptDrop)
+    }
+
+    @ViewBuilder
+    private var submitControl: some View {
+        // 当前版的补充与选答共用一个显式更新按钮，回车只在输入框换行。
+        if state.hasCurrentRefinement && !state.isBusy {
+            Button("更新增强提示词", action: state.updateRefinement)
+                .buttonStyle(.borderedProminent)
+                .disabled(!state.canUpdateRefinement)
+        } else {
+            Button {
+                if state.isBusy {
+                    state.cancelGeneration()
+                } else {
+                    state.submit()
+                }
+            } label: {
+                Image(systemName: state.isBusy ? "stop.fill" : "arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: compact ? 34 : 40, height: compact ? 34 : 40)
+                    .background(state.isBusy || state.canSubmit ? AssistantPalette.accent : Color(red: 0.61, green: 0.62, blue: 1), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!state.isBusy && !state.canSubmit)
+            .help(state.isBusy ? "停止本次生成" : "提交到提示词助手")
+        }
     }
 
     private func acceptDrop(_ providers: [NSItemProvider]) -> Bool {

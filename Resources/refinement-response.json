@@ -79,14 +79,20 @@
           "recommendedID"
         ],
         "additionalProperties": false
-      },
-      "maxItems": 3
+      }
+    },
+    "resolvedQuestionIDs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [
     "kind",
     "candidates",
-    "questions"
+    "questions",
+    "resolvedQuestionIDs"
   ],
   "additionalProperties": false
 }

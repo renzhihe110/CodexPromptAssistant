@@ -2,6 +2,13 @@ import Foundation
 
 // MARK: - 独立的临时生成任务
 
+// 一次显式更新携带的增量，成功前保留在表单里。
+struct RefinementUpdate: Sendable {
+    let answers: [AnswerRecord]
+    let note: String
+    let attachments: [ImageAttachment]
+}
+
 struct GenerationInput: Sendable {
     let mode: AssistantMode
     let chat: SourceChat
@@ -19,6 +26,9 @@ struct GenerationInput: Sendable {
     let configuration: EffectiveConfiguration
     let modelID: String
     let effort: String?
+
+    var update: RefinementUpdate? = nil
+    var resolvedClarifications: [String: String] = [:]
 
     var schemaName: String {
         // 完善文本始终返回一份增强版，推荐下一步继续使用原来的两个分支。
@@ -335,7 +345,12 @@ actor PromptEngine {
     }
 
     private static func prompt(for input: GenerationInput) throws -> String {
-        let answers = input.answers.map { JSONValue.object(["question": .string($0.question), "answer": .string($0.answer)]) }
+        func answerValue(_ record: AnswerRecord) -> JSONValue {
+            var fields: [String: JSONValue] = ["question": .string(record.question), "answer": .string(record.answer)]
+            if let id = record.questionID { fields["id"] = .string(id) }
+            return .object(fields)
+        }
+        let answers = input.answers.map(answerValue)
         let candidates = input.previousCandidates.map { JSONValue.object(["title": .string($0.title), "prompt": .string($0.prompt)]) }
         var fields: [String: JSONValue] = [
             "mode": .string(input.mode.rawValue),
@@ -350,6 +365,11 @@ actor PromptEngine {
         ]
         // 更新时显式提供尚待决定的事项，筛选快照和侧边聊天共享相同的确认记录。
         if input.mode == .refine {
+            if let update = input.update {
+                fields["new_answers"] = .array(update.answers.map(answerValue))
+                fields["new_request"] = .string(update.note)
+            }
+            fields["resolved_questions"] = .object(input.resolvedClarifications.mapValues(JSONValue.string))
             fields["remaining_questions"] = .array(input.remainingQuestions.map {
                 .object(["id": .string($0.id), "text": .string($0.text)])
             })
@@ -373,8 +393,10 @@ actor PromptEngine {
             沿用用户的语言和语气。原话已能执行就只做轻改；简单任务用一两句，直接写动作、对象和交付物。不要把一句请求扩写成「背景、步骤、注意事项、验收」模板。
             只补会改变结果的已知条件；必要事实缺失时在对应位置写 [待补充：具体信息]。原样保留关键数值、路径、专名和限制。复杂任务或用户要求详细时按需展开，每项要求只说一次。
             交付物写清就结束正文。删除寒暄、催促、致谢、同义复述和通用质量要求；不要把澄清问题、选项或修改说明写入正文。复制后应能独立使用。
-            首轮只列最能改变交付结果的 0～3 个未决问题，按影响从高到低排列。问题明确说明要决定什么。每题给出 2～3 个具体不同的选项，detail 说明采用该选项后成品会怎样变化。recommendedID 只是建议。界面支持自填答案。已明确的事项不要问，信息充分则返回空数组。
-            更新时以最近编辑的正文为基础，就地替换或合并信息，不在末尾追加一遍旧要求。吸收 answers 和 additional_requests 明确确认的内容，替换相应占位符，保留其余约束。最新明确更正优先。只保留 remaining_questions 中仍相关且尚未得到回答的问题，沿用原 ID；同义回答也算已解决，不得改写后再问或引入新的例行问题。
+            每次均一次列出所有会实质改变交付结果的未决问题，按影响从高到低排列。同一事项只问一次，不凑题数。问题明确说明要决定什么。每题给出 2～3 个具体不同的选项，detail 说明采用该选项后成品会怎样变化。recommendedID 只是建议。界面支持自填答案。已明确的事项不要问，信息充分则返回空数组。
+            更新以 previous_candidates 中最近保存的正文为底稿。只把 new_answers、new_request 及附图带来的信息就地融入；本次明确更正优先。历史确认内容只补缺，不能恢复用户手动删除或改写的要求。已明确的事实替换对应占位符，其余必要占位符和关键约束保留。
+            questions 是更新后完整的问题列表。逐项核对当前正文和本次补充，已直接或间接解答、已失去意义的问题移除。同一未决事项沿用原 ID，选项按最新事实刷新。只有确实出现新的关键缺口时才使用新 ID；不得换 ID 重问已解决事项。
+            resolvedQuestionIDs 只列本次已由答案、自由补充或手动编辑解决的旧题 ID；首轮为空。部分回答仍缺关键事实时保留原 ID，只问缺失部分。曾经解决的事项见 resolved_questions。
             """
         } else {
             rules = """

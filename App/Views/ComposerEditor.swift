@@ -6,7 +6,7 @@ import SwiftUI
 struct ComposerEditor: NSViewRepresentable {
     @Binding var text: String
     let enabled: Bool
-    let onSubmit: () -> Void
+    let onSubmit: (() -> Void)?
     let onPasteImage: (NSImage) -> Void
     let onDropFile: (URL) -> Void
     let onHeightChange: (CGFloat) -> Void
@@ -97,8 +97,8 @@ final class PromptTextView: NSTextView {
 
     override func keyDown(with event: NSEvent) {
         let isReturn = event.keyCode == 36 || event.keyCode == 76
-        if isReturn, !hasMarkedText(), !event.modifierFlags.contains(.shift), !event.modifierFlags.contains(.option) {
-            onSubmit?()
+        if let onSubmit, isReturn, !hasMarkedText(), !event.modifierFlags.contains(.shift), !event.modifierFlags.contains(.option) {
+            onSubmit()
             return
         }
         super.keyDown(with: event)

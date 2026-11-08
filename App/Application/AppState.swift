@@ -33,7 +33,11 @@ final class AppState: ObservableObject {
             return
         }
         roundContext = .snapshot
-        performGeneration()
+        if hasCurrentRefinement {
+            sideChatFailed = false
+        } else {
+            performGeneration()
+        }
     }
 
     @Published private(set) var selectedChat: SourceChat?
@@ -172,11 +176,31 @@ final class AppState: ObservableObject {
         return ReasoningOption(id: resolvedEffort, detail: "").title
     }
 
-    // 以最近一次正式结果为准。已提交的答案在失败和重试期间也不会重新出现。
-    var remainingQuestions: [ClarifyingQuestion] {
-        let previous = messages.last(where: { !$0.candidates.isEmpty })?.clarificationQuestions ?? []
-        let answered = Set(answers.compactMap(\.questionID))
-        return previous.filter { !answered.contains($0.id) }
+    var hasCurrentRefinement: Bool { mode == .refine && !latestCandidates.isEmpty }
+
+    private var currentResult: ChatMessage? {
+        messages.last { !$0.candidates.isEmpty }
+    }
+
+    var remainingQuestions: [ClarifyingQuestion] { currentResult?.clarificationQuestions ?? [] }
+
+    // 当前正式版本是复制和更新的共同底稿；只有存在待处理改动才需要请求模型。
+    var canUpdateRefinement: Bool {
+        guard hasCurrentRefinement, !isBusy, !isConnecting, selectedChat != nil else { return false }
+        return currentResult?.generatedPrompt != latestCandidates.first?.prompt ||
+            !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty ||
+            clarificationDrafts.values.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    func updateRefinement() {
+        guard canUpdateRefinement else { return }
+        let records = remainingQuestions.compactMap { question -> AnswerRecord? in
+            guard let answer = clarificationDrafts[question.id]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !answer.isEmpty else { return nil }
+            return AnswerRecord(questionID: question.id, question: question.text, answer: answer)
+        }
+        isWindowCollapsed = false
+        performGeneration(update: RefinementUpdate(answers: records, note: draft.trimmingCharacters(in: .whitespacesAndNewlines), attachments: pendingAttachments))
     }
 
     func isCurrentRefinement(_ message: ChatMessage) -> Bool {
@@ -184,14 +208,14 @@ final class AppState: ObservableObject {
     }
 
     var canSubmit: Bool {
-        guard !isBusy, !isConnecting, selectedChat != nil else {
+        guard !hasCurrentRefinement, !isBusy, !isConnecting, selectedChat != nil else {
             return false
         }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         if text == "其他：" || text == "其他:" {
             return false
         }
-        return !text.isEmpty || clarificationDrafts.values.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } || (!roundStarted && (mode == .nextStep || !pendingAttachments.isEmpty))
+        return !text.isEmpty || (!roundStarted && (mode == .nextStep || !pendingAttachments.isEmpty))
     }
 
     var composerPlaceholder: String {
@@ -428,17 +452,7 @@ final class AppState: ObservableObject {
         if endingQuestions {
             candidatesOnly = true
         }
-        // 仅把用户实际填写的内容带入下一版，并把问答保留在本轮记录中。
-        let confirmed = remainingQuestions.compactMap { question -> AnswerRecord? in
-            guard let answer = clarificationDrafts[question.id]?.trimmingCharacters(in: .whitespacesAndNewlines), !answer.isEmpty else {
-                return nil
-            }
-            return AnswerRecord(questionID: question.id, question: question.text, answer: answer)
-        }
-        answers.append(contentsOf: confirmed)
-        clarificationDrafts.removeAll()
-        let summary = ([text] + confirmed.map { $0.question + " → " + $0.answer }).filter { !$0.isEmpty }.joined(separator: "\n")
-        let visible = summary.nonEmpty(or: endingQuestions ? "结束提问，生成提示词。" : "结合当前聊天，帮我推荐下一步。")
+        let visible = text.nonEmpty(or: endingQuestions ? "结束提问，生成提示词。" : "结合当前聊天，帮我推荐下一步。")
         messages.append(ChatMessage(role: .user, text: visible, attachments: addedImages))
         // 只在提交通过校验后展开；换行、无效选项和停止生成不会触发展开。
         isWindowCollapsed = false
@@ -447,7 +461,7 @@ final class AppState: ObservableObject {
     }
 
     func retry() {
-        guard retryAvailable, !isBusy, roundStarted else {
+        guard !hasCurrentRefinement, retryAvailable, !isBusy, roundStarted else {
             return
         }
         performGeneration()
@@ -465,7 +479,7 @@ final class AppState: ObservableObject {
     }
 
     // 每次请求都捕获独立身份，来源切换或取消后不会接收旧任务结果。
-    private func performGeneration() {
+    private func performGeneration(update: RefinementUpdate? = nil) {
         guard let chat = selectedChat, !isBusy else {
             return
         }
@@ -514,10 +528,11 @@ final class AppState: ObservableObject {
                 guard let modelID = resolvedModelID else {
                     throw AssistantError.generationFailed("没有可用模型，请重新连接 Codex 或在模型设置中选择模型。")
                 }
-                if !roundAttachments.isEmpty, resolvedModel?.supportsImages != true {
+                let images = roundAttachments + (update?.attachments ?? [])
+                if !images.isEmpty, resolvedModel?.supportsImages != true {
                     throw AssistantError.imageUnsupported
                 }
-                let input = GenerationInput(mode: mode, chat: chat, snapshot: snapshot, roundID: roundID, forkBoundary: contextMode == .sideChat ? forkBoundary : nil, draft: initialDraft, answers: answers, remainingQuestions: remainingQuestions, feedback: feedback, previousCandidates: latestCandidates, attachments: roundAttachments, questionCount: questionCount, candidatesOnly: candidatesOnly, configuration: currentConfiguration, modelID: modelID, effort: resolvedEffort)
+                let input = GenerationInput(mode: mode, chat: chat, snapshot: snapshot, roundID: roundID, forkBoundary: contextMode == .sideChat ? forkBoundary : nil, draft: initialDraft, answers: answers, remainingQuestions: remainingQuestions, feedback: feedback, previousCandidates: latestCandidates, attachments: images, questionCount: questionCount, candidatesOnly: candidatesOnly, configuration: currentConfiguration, modelID: modelID, effort: resolvedEffort, update: update, resolvedClarifications: currentResult?.resolvedClarifications ?? [:])
                 loadingText = candidatesOnly ? "正在整理候选提示词…" : "正在理解你的想法…"
                 let response = try await engine.generate(input) { [weak state = self] preview in
                     await state?.receivePreview(preview, id: id)
@@ -528,7 +543,7 @@ final class AppState: ObservableObject {
                 generationTiming?.validatedAt = Date()
                 generationTiming?.outcome = "validated"
                 streamingPreview = GenerationPreview()
-                accept(response)
+                accept(response, update: update)
                 isBusy = false
                 generationTask = nil
             } catch is CancellationError {
@@ -582,14 +597,32 @@ final class AppState: ObservableObject {
         generationTiming?.outcome = "visible"
     }
 
-    private func accept(_ response: EngineResponse) {
+    private func accept(_ response: EngineResponse, update: RefinementUpdate? = nil) {
         if response.kind == "refinement" {
-            // 首轮列出关键问题；更新时只允许保留上一版的未答问题，保持题意与选项稳定。
-            let proposed = response.questions ?? []
-            let retainedIDs = Set(proposed.map(\.id))
-            let questions = latestCandidates.isEmpty ? proposed : remainingQuestions.filter { retainedIDs.contains($0.id) }
+            // 在当前请求已校验成功后一次性确认答案、附图和正文。失败或取消都保留原表单。
+            if let update {
+                answers.append(contentsOf: update.answers)
+                if !update.note.isEmpty { feedback.append(update.note) }
+                roundAttachments.append(contentsOf: update.attachments)
+                let summary = ([update.note] + update.answers.map { $0.question + " → " + $0.answer })
+                    .filter { !$0.isEmpty }.joined(separator: "\n")
+                messages.append(ChatMessage(role: .user, text: summary.nonEmpty(or: "更新增强提示词"), attachments: update.attachments))
+                clarificationDrafts.removeAll()
+                pendingAttachments.removeAll()
+                draft = ""
+            }
+            // 只有真正解决的旧题才归档。仅答了部分细节时，模型可以沿用原 ID 继续问缺失部分。
+            var resolved = currentResult?.resolvedClarifications ?? [:]
+            let newlyResolved = Set(response.resolvedQuestionIDs ?? [])
+            for question in remainingQuestions where newlyResolved.contains(question.id) {
+                resolved[question.id] = question.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let resolvedText = Set(resolved.values)
+            let questions = (response.questions ?? []).filter {
+                resolved[$0.id] == nil && !resolvedText.contains($0.text.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
             latestCandidates = response.candidates.map { PromptCandidate(id: UUID().uuidString, title: "增强版提示词", prompt: $0.prompt) }
-            messages.append(ChatMessage(role: .assistant, text: "", candidates: latestCandidates, clarificationQuestions: questions))
+            messages.append(ChatMessage(role: .assistant, text: "", candidates: latestCandidates, generatedPrompt: latestCandidates.first?.prompt, clarificationQuestions: questions, resolvedClarifications: resolved))
         } else if let question = response.question {
             let orderedOptions = question.options.filter { $0.id == question.recommendedID } + question.options.filter { $0.id != question.recommendedID }
             let normalized = ClarifyingQuestion(id: UUID().uuidString, text: question.text, options: orderedOptions, recommendedID: question.recommendedID)
