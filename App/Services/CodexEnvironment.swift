@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 // MARK: - 桌面进程启动环境
 
@@ -17,6 +17,16 @@ enum CodexEnvironment {
         for path in fixedPaths + pathEntries {
             if FileManager.default.isExecutableFile(atPath: path) {
                 return URL(fileURLWithPath: path)
+            }
+        }
+        // Finder 启动时 PATH 可能只含系统目录。用稳定的 bundle ID 定位桌面应用，兼容改名或移动的安装。
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.openai.codex") {
+            // 新版将 CLI 封装在独立的应用包内，旧版直接放在 Resources 下。
+            for relativePath in ["Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex", "Contents/Resources/codex"] {
+                let candidate = app.appendingPathComponent(relativePath)
+                if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                    return candidate
+                }
             }
         }
         throw AssistantError.codexNotFound

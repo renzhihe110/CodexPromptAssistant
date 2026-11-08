@@ -154,7 +154,7 @@ actor PromptEngine {
             } else {
                 try await job.transport.start(arguments: Self.arguments(for: job.input))
                 events = await job.transport.notificationStream()
-                _ = try await job.transport.request("initialize", params: ["clientInfo": .object(["name": .string("codex_prompt_assistant"), "version": .string("0.1.0")]), "capabilities": .object(["experimentalApi": .bool(true)])])
+                _ = try await job.transport.request("initialize", params: ["clientInfo": .object(["name": .string("codex_prompt_assistant"), "version": .string("0.1.1")]), "capabilities": .object(["experimentalApi": .bool(true)])])
                 try await job.transport.initialized()
                 try Task.checkCancellation()
                 var config: [String: JSONValue] = ["project_doc_max_bytes": .number(0), "web_search": .string("disabled"), "mcp_servers": .object([:])]
