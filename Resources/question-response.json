@@ -1,0 +1,87 @@
+{
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "question"
+      ]
+    },
+    "question": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "detail"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 3
+        },
+        "recommendedID": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "options",
+        "recommendedID"
+      ],
+      "additionalProperties": false
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "prompt"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 0
+    }
+  },
+  "required": [
+    "kind",
+    "question",
+    "candidates"
+  ],
+  "additionalProperties": false
+}

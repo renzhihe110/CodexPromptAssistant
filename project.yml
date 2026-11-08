@@ -1,0 +1,39 @@
+# 仅生成原生 macOS 应用工程，不包含测试目标或自动构建脚本。
+name: CodexPromptAssistant
+options:
+  bundleIdPrefix: com.renzhihe
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGNING_ALLOWED: NO
+    ENABLE_APP_SANDBOX: NO
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  CodexPromptAssistant:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+        excludes:
+          - Info.plist
+      - path: Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.renzhihe.CodexPromptAssistant
+        PRODUCT_NAME: CodexPromptAssistant
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Info.plist
+schemes:
+  CodexPromptAssistant:
+    build:
+      targets:
+        CodexPromptAssistant: all
+    run:
+      config: Debug

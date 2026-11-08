@@ -1,0 +1,12 @@
+# 本地开发状态与生成任务的临时内容不进入源码管理。
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# 本地诊断、聊天示例截图和开发过程记录不对外发布。
+.planning-with-files/
+Docs/
+design-qa.md
+AGENTS.md

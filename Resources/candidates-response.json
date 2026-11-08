@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "candidates"
+      ]
+    },
+    "question": {
+      "type": "null"
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "prompt"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 3,
+      "minItems": 2
+    }
+  },
+  "required": [
+    "kind",
+    "question",
+    "candidates"
+  ],
+  "additionalProperties": false
+}
