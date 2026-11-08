@@ -13,6 +13,7 @@
 		90149FF2EF1F4434E5B43C37 /* WelcomeTopEdge.png in Resources */ = {isa = PBXBuildFile; fileRef = 32F9B5C7D5B6317C137C6946 /* WelcomeTopEdge.png */; };
 		C34EF0FFCB729B4F42CB21A0 /* WelcomeWaves.png in Resources */ = {isa = PBXBuildFile; fileRef = 45DD39CB4A9B303AE6B711FD /* WelcomeWaves.png */; };
 		A85CAF579F45C482A2B11BFD /* ChatPickerArt.png in Resources */ = {isa = PBXBuildFile; fileRef = D76EA1BADD064579849EE749 /* ChatPickerArt.png */; };
+		F83D39459B1148F5BA3B01E2 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = F83D39459B1148F5BA3B01E1 /* AppIcon.icns */; };
 		A34501EAB84F49B9A81C0182 /* MistPaper.png in Resources */ = {isa = PBXBuildFile; fileRef = A34501EAB84F49B9A81C0181 /* MistPaper.png */; };
 		297B0FF71AA04349001CA327 /* PromptEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1013F3C059F46ABFF5D2445E /* PromptEngine.swift */; };
 		43CEC56D3F2AC34859620EF6 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E570D8336751AFF360F9B957 /* Models.swift */; };
@@ -41,6 +42,7 @@
 		32F9B5C7D5B6317C137C6946 /* WelcomeTopEdge.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = WelcomeTopEdge.png; sourceTree = "<group>"; };
 		45DD39CB4A9B303AE6B711FD /* WelcomeWaves.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = WelcomeWaves.png; sourceTree = "<group>"; };
 		D76EA1BADD064579849EE749 /* ChatPickerArt.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ChatPickerArt.png; sourceTree = "<group>"; };
+		F83D39459B1148F5BA3B01E1 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		A34501EAB84F49B9A81C0181 /* MistPaper.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = MistPaper.png; sourceTree = "<group>"; };
 		0A0B11B3397C03914F25992F /* ComposerEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerEditor.swift; sourceTree = "<group>"; };
 		1013F3C059F46ABFF5D2445E /* PromptEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptEngine.swift; sourceTree = "<group>"; };
@@ -55,7 +57,7 @@
 		1F3438029B764EC7950A759D /* CodexCandidateSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexCandidateSender.swift; sourceTree = "<group>"; };
 		98CAF1504D022B4A9237C2B5 /* CodexReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexReader.swift; sourceTree = "<group>"; };
 		D625D7DADF95633E747CF33F /* UtilityViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilityViews.swift; sourceTree = "<group>"; };
-		DE6A6F345B0A9803B299FD1C /* CodexPromptAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodexPromptAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE6A6F345B0A9803B299FD1C /* 提示词助手.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "提示词助手.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DFFCA3FDFC6B976221456182 /* candidates-response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "candidates-response.json"; sourceTree = "<group>"; };
 		E0AD5229BD3368F43005529D /* question-response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "question-response.json"; sourceTree = "<group>"; };
 		399EA219616E48CB951D67D4 /* refinement-response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "refinement-response.json"; sourceTree = "<group>"; };
@@ -67,6 +69,7 @@
 		000CA3F9C3915922D422F672 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				F83D39459B1148F5BA3B01E1 /* AppIcon.icns */,
 				A34501EAB84F49B9A81C0181 /* MistPaper.png */,
 				CD0075F7EDB213DE1E7A48A4 /* ProfileMark.png */,
 				DFDC322299181554CE831E9F /* WandMark.png */,
@@ -138,7 +141,7 @@
 		C5DAB54C04668E87E6BCFF80 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				DE6A6F345B0A9803B299FD1C /* CodexPromptAssistant.app */,
+				DE6A6F345B0A9803B299FD1C /* 提示词助手.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -169,8 +172,8 @@
 			name = CodexPromptAssistant;
 			packageProductDependencies = (
 			);
-			productName = CodexPromptAssistant;
-			productReference = DE6A6F345B0A9803B299FD1C /* CodexPromptAssistant.app */;
+			productName = "提示词助手";
+			productReference = DE6A6F345B0A9803B299FD1C /* 提示词助手.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -208,6 +211,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F83D39459B1148F5BA3B01E2 /* AppIcon.icns in Resources */,
 				A34501EAB84F49B9A81C0182 /* MistPaper.png in Resources */,
 				AA463493FDCD3DE6A0BB8AE4 /* ProfileMark.png in Resources */,
 				9CBB3A82C4A179F87C4FCD03 /* WandMark.png in Resources */,
@@ -284,7 +288,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGNING_ALLOWED = NO;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -305,7 +309,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -353,7 +357,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGNING_ALLOWED = NO;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -368,7 +372,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -392,7 +396,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.renzhihe.CodexPromptAssistant;
-				PRODUCT_NAME = CodexPromptAssistant;
+				PRODUCT_NAME = "提示词助手";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -409,7 +413,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.renzhihe.CodexPromptAssistant;
-				PRODUCT_NAME = CodexPromptAssistant;
+				PRODUCT_NAME = "提示词助手";
 				SDKROOT = macosx;
 			};
 			name = Debug;

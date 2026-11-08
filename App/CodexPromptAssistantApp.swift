@@ -16,7 +16,7 @@ struct CodexPromptAssistantApp: App {
                 delegate.windowController?.show()
             }
             .keyboardShortcut("p", modifiers: [.control, .option, .command])
-            Text("助手窗口内按 ⌘D 收起或展开")
+            Text("提示词助手窗口内按 ⌘D 收起或展开")
             Divider()
             Button("退出提示词助手") {
                 NSApplication.shared.terminate(nil)
@@ -33,8 +33,6 @@ final class AssistantAppDelegate: NSObject, NSApplicationDelegate {
     private var terminating = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 程序坞沿用窗口标题栏的魔杖图标，方便识别助手。
-        NSApp.applicationIconImage = WelcomeArtwork.wand
         let state = AppState()
         let controller = AssistantWindowController(state: state)
         windowController = controller
@@ -166,7 +164,7 @@ final class AssistantWindowController: NSObject, NSWindowDelegate {
             state?.isWindowCollapsed.toggle()
         }
         if shortcut?.registered != true {
-            state.information = "快捷键 ⌃⌥⌘P 注册失败，可能已被占用。可以通过菜单栏打开助手。"
+            state.information = "快捷键 ⌃⌥⌘P 注册失败，可能已被占用。可以通过菜单栏打开提示词助手。"
         }
     }
 
